@@ -1,14 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Multi-Machine Telemetry Dashboard</title>
+  <meta charset="UTF-8">
+  <title>Multi-Machine Telemetry</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
+    html, body {
       margin: 0;
-      padding: 1.5rem;
-      background: #f0f2f5;
+      padding: 0;
+      background: #f0f0f0;
+      font-family: Arial, sans-serif;
+      height: 100%;
+      box-sizing: border-box;
+    }
+
+    #wrapper {
+      padding: 1rem;
     }
 
     #sort-controls {
@@ -24,16 +30,16 @@
     #card-container {
       display: flex;
       flex-wrap: wrap;
-      gap: 1rem;
       justify-content: center;
+      gap: 1rem;
     }
 
     .machine-card {
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      background: #fff;
+      border-radius: 8px;
       padding: 1rem;
-      width: 250px;
+      width: 240px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       text-align: center;
     }
 
@@ -44,44 +50,39 @@
     }
 
     .telemetry {
+      margin: 0.25rem 0;
       font-size: 1rem;
-      margin: 0.3rem 0;
     }
   </style>
 </head>
 <body>
-  <div id="sort-controls">
-    <label for="sort-by">Sort By:</label>
-    <select id="sort-by">
-      <option value="Performance">Performance</option>
-      <option value="Availability">Availability</option>
-      <option value="OEE">OEE</option>
-      <option value="Production">Production</option>
-    </select>
-  </div>
+  <div id="wrapper">
+    <div id="sort-controls">
+      <label for="sort-by">Sort By:</label>
+      <select id="sort-by">
+        <option value="Performance">Performance</option>
+        <option value="Availability">Availability</option>
+        <option value="OEE">OEE</option>
+        <option value="Production">Production</option>
+      </select>
+    </div>
 
-  <div id="card-container"></div>
+    <div id="card-container"></div>
+  </div>
 
   <script>
     const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
     const machinePrefixes = ['M1', 'M2', 'M3'];
     const telemetryFields = ['Availability', 'Performance', 'OEE', 'Production'];
     const telemetryData = {};
-
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
 
     async function fetchTelemetry() {
-      const keys = machinePrefixes.flatMap(prefix =>
-        telemetryFields.map(field => `${prefix}_${field}`)
-      ).join(',');
-
+      const keys = machinePrefixes.flatMap(p => telemetryFields.map(f => `${p}_${f}`)).join(',');
       const response = await fetch(`${apiBaseUrl}/plugins/telemetry/DEVICE/${deviceId}/values/timeseries?keys=${keys}`, {
-        headers: {
-          'X-Authorization': `Bearer ${jwt}`
-        }
+        headers: { 'X-Authorization': `Bearer ${jwt}` }
       });
-
       const data = await response.json();
 
       for (const prefix of machinePrefixes) {
@@ -96,7 +97,6 @@
     function renderCards(sortBy) {
       const container = document.getElementById('card-container');
       container.innerHTML = '';
-
       const sorted = [...machinePrefixes].sort((a, b) =>
         telemetryData[b][sortBy] - telemetryData[a][sortBy]
       );
@@ -116,20 +116,25 @@
       }
     }
 
+    async function initializeDashboard() {
+      if (!jwt) {
+        alert("Missing JWT token in URL (?token=...)");
+        return;
+      }
+
+      try {
+        await fetchTelemetry();
+        renderCards(document.getElementById('sort-by').value);
+      } catch (err) {
+        console.error("Error fetching telemetry:", err);
+      }
+    }
+
     document.getElementById('sort-by').addEventListener('change', e => {
       renderCards(e.target.value);
     });
 
-    async function init() {
-      if (!jwt) {
-        alert("Missing ?token=JWT parameter in URL");
-        return;
-      }
-      await fetchTelemetry();
-      renderCards(document.getElementById('sort-by').value);
-    }
-
-    init();
+    initializeDashboard();
   </script>
 </body>
 </html>
