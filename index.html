@@ -119,6 +119,7 @@
     const data = {};
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
+    let currentSortBy = 'Performance';
 
     async function fetchTelemetry() {
       const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
@@ -143,6 +144,7 @@
     }
 
     function renderCards(sortBy) {
+      currentSortBy = sortBy;
       const container = document.getElementById('card-container');
       container.innerHTML = '';
 
@@ -161,22 +163,10 @@
           <div>SKU: ${t.SKU}</div>
 
           <div class="metric-grid">
-            <div class="metric-box">
-              <div>PRODUCTION (PCS)</div>
-              <div class="metric-value-green">${t.Production}</div>
-            </div>
-            <div class="metric-box">
-              <div>KWH CONSUMPTION</div>
-              <div class="metric-value-green">${t.KWH} Kwh</div>
-            </div>
-            <div class="metric-box">
-              <div>MOMENTARY LOSS</div>
-              <div class="metric-value-green">${t.MomentaryLoss}</div>
-            </div>
-            <div class="metric-box">
-              <div>DOWNTIME (MIN)</div>
-              <div class="metric-value-red">${t.Downtime}</div>
-            </div>
+            <div class="metric-box"><div>PRODUCTION (PCS)</div><div class="metric-value-green">${t.Production}</div></div>
+            <div class="metric-box"><div>KWH CONSUMPTION</div><div class="metric-value-green">${t.KWH} Kwh</div></div>
+            <div class="metric-box"><div>MOMENTARY LOSS</div><div class="metric-value-green">${t.MomentaryLoss}</div></div>
+            <div class="metric-box"><div>DOWNTIME (MIN)</div><div class="metric-value-red">${t.Downtime}</div></div>
           </div>
 
           <div class="label-bar">PERFORMANCE</div>
@@ -195,8 +185,18 @@
       });
     }
 
-    document.getElementById('sort-by').addEventListener('change', () => {
-      renderCards(document.getElementById('sort-by').value);
+    async function refreshAndRender() {
+      try {
+        await fetchTelemetry();
+        renderCards(currentSortBy);
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
+    }
+
+    document.getElementById('sort-by').addEventListener('change', e => {
+      currentSortBy = e.target.value;
+      renderCards(currentSortBy);
     });
 
     async function init() {
@@ -204,8 +204,8 @@
         alert('Missing JWT token in URL (?token=...)');
         return;
       }
-      await fetchTelemetry();
-      renderCards(document.getElementById('sort-by').value);
+      await refreshAndRender();
+      setInterval(refreshAndRender, 5000); // Auto-refresh every 5 sec
     }
 
     init();
