@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>Machine Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -20,12 +19,6 @@
     select {
       padding: 0.5rem;
       font-size: 1rem;
-    }
-
-    #chart-container {
-      max-width: 700px;
-      margin: 0 auto 2rem auto;
-      display: none;
     }
 
     #card-container {
@@ -117,10 +110,6 @@
     </select>
   </div>
 
-  <div id="chart-container">
-    <canvas id="barChart"></canvas>
-  </div>
-
   <div id="card-container"></div>
 
   <script>
@@ -131,7 +120,6 @@
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
     let currentSortBy = 'Performance';
-    let chartInstance = null;
 
     async function fetchTelemetry() {
       const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
@@ -155,49 +143,12 @@
       });
     }
 
-    function renderChart(sorted) {
-      const chartContainer = document.getElementById('chart-container');
-      const canvas = document.getElementById('barChart');
-
-      if (currentSortBy !== 'Performance') {
-        chartContainer.style.display = 'none';
-        return;
-      }
-
-      chartContainer.style.display = 'block';
-
-      const labels = sorted.map(p => `Machine ${p.charAt(1)}`);
-      const values = sorted.map(p => data[p].Performance);
-
-      if (chartInstance) chartInstance.destroy();
-
-      chartInstance = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [{
-            label: 'Performance (%)',
-            data: values,
-            backgroundColor: ['#3498db', '#3498db', '#3498db']
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            y: { beginAtZero: true, max: 100 }
-          }
-        }
-      });
-    }
-
     function renderCards(sortBy) {
       currentSortBy = sortBy;
       const container = document.getElementById('card-container');
       container.innerHTML = '';
 
       const sorted = [...prefixes].sort((a, b) => data[b][sortBy] - data[a][sortBy]);
-
-      renderChart(sorted);
 
       sorted.forEach(p => {
         const t = data[p];
@@ -254,7 +205,7 @@
         return;
       }
       await refreshAndRender();
-      setInterval(refreshAndRender, 5000);
+      setInterval(refreshAndRender, 5000); // Auto-refresh every 5 sec
     }
 
     init();
