@@ -2,81 +2,134 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Machine Telemetry Dashboard</title>
+  <title>Multi-Machine Telemetry Dashboard</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 0;
-      padding: 2rem;
+      padding: 1.5rem;
       background: #f0f2f5;
     }
 
-    .card {
-      background-color: white;
-      max-width: 350px;
-      margin: auto;
-      padding: 1.5rem;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-
-    .card h2 {
+    #sort-controls {
       margin-bottom: 1rem;
       text-align: center;
-      font-size: 1.5rem;
+    }
+
+    select {
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+
+    #card-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .machine-card {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 1rem;
+      width: 250px;
+      text-align: center;
+    }
+
+    .machine-title {
+      font-weight: bold;
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
     }
 
     .telemetry {
-      font-size: 1.1rem;
-      margin: 0.5rem 0;
-    }
-
-    .error {
-      color: red;
-      text-align: center;
-      margin-top: 1rem;
+      font-size: 1rem;
+      margin: 0.3rem 0;
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>Machine 1 Telemetry</h2>
-    <div class="telemetry" id="Availability">Availability: Loading...</div>
-    <div class="telemetry" id="Performance">Performance: Loading...</div>
-    <div class="telemetry" id="OEE">OEE: Loading...</div>
-    <div class="telemetry" id="Production">Production: Loading...</div>
-    <div class="error" id="error-message"></div>
+  <div id="sort-controls">
+    <label for="sort-by">Sort By:</label>
+    <select id="sort-by">
+      <option value="Performance">Performance</option>
+      <option value="Availability">Availability</option>
+      <option value="OEE">OEE</option>
+      <option value="Production">Production</option>
+    </select>
   </div>
+
+  <div id="card-container"></div>
 
   <script>
     const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
-    const telemetryKeys = ['M1_Availability', 'M1_Performance', 'M1_OEE', 'M1_Production'];
+    const machinePrefixes = ['M1', 'M2', 'M3'];
+    const telemetryFields = ['Availability', 'Performance', 'OEE', 'Production'];
+    const telemetryData = {};
+
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
 
-    if (!jwt) {
-      document.getElementById('error-message').innerText = 'JWT token missing in URL (?token=...)';
-    } else {
-      fetch(`${apiBaseUrl}/plugins/telemetry/DEVICE/${deviceId}/values/timeseries?keys=${telemetryKeys.join(',')}`, {
+    async function fetchTelemetry() {
+      const keys = machinePrefixes.flatMap(prefix =>
+        telemetryFields.map(field => `${prefix}_${field}`)
+      ).join(',');
+
+      const response = await fetch(`${apiBaseUrl}/plugins/telemetry/DEVICE/${deviceId}/values/timeseries?keys=${keys}`, {
         headers: {
           'X-Authorization': `Bearer ${jwt}`
         }
-      })
-      .then(res => {
-        if (!res.ok) throw new Error('Unauthorized or invalid device ID');
-        return res.json();
-      })
-      .then(data => {
-        document.getElementById('Availability').innerText = `Availability: ${parseFloat(data.M1_Availability?.[0]?.value || 0).toFixed(2)}`;
-        document.getElementById('Performance').innerText = `Performance: ${parseFloat(data.M1_Performance?.[0]?.value || 0).toFixed(2)}`;
-        document.getElementById('OEE').innerText = `OEE: ${parseFloat(data.M1_OEE?.[0]?.value || 0).toFixed(2)}`;
-        document.getElementById('Production').innerText = `Production: ${parseFloat(data.M1_Production?.[0]?.value || 0).toFixed(2)}`;
-      })
-      .catch(error => {
-        console.error(error);
-        document.getElementById('error-message').innerText = 'Failed to load telemetry. Check token and device ID.';
       });
+
+      const data = await response.json();
+
+      for (const prefix of machinePrefixes) {
+        telemetryData[prefix] = {};
+        for (const field of telemetryFields) {
+          const key = `${prefix}_${field}`;
+          telemetryData[prefix][field] = parseFloat(data[key]?.[0]?.value || 0);
+        }
+      }
     }
+
+    function renderCards(sortBy) {
+      const container = document.getElementById('card-container');
+      container.innerHTML = '';
+
+      const sorted = [...machinePrefixes].sort((a, b) =>
+        telemetryData[b][sortBy] - telemetryData[a][sortBy]
+      );
+
+      for (const prefix of sorted) {
+        const t = telemetryData[prefix];
+        const card = document.createElement('div');
+        card.className = 'machine-card';
+        card.innerHTML = `
+          <div class="machine-title">Machine ${prefix.charAt(1)}</div>
+          <div class="telemetry">Availability: ${t.Availability.toFixed(2)}</div>
+          <div class="telemetry">Performance: ${t.Performance.toFixed(2)}</div>
+          <div class="telemetry">OEE: ${t.OEE.toFixed(2)}</div>
+          <div class="telemetry">Production: ${t.Production.toFixed(2)}</div>
+        `;
+        container.appendChild(card);
+      }
+    }
+
+    document.getElementById('sort-by').addEventListener('change', e => {
+      renderCards(e.target.value);
+    });
+
+    async function init() {
+      if (!jwt) {
+        alert("Missing ?token=JWT parameter in URL");
+        return;
+      }
+      await fetchTelemetry();
+      renderCards(document.getElementById('sort-by').value);
+    }
+
+    init();
   </script>
 </body>
 </html>
