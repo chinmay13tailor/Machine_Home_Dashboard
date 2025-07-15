@@ -110,25 +110,32 @@
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
     }
 
-    .graph-bar {
+    .graph-section h3 {
+      margin-bottom: 1rem;
+    }
+
+    .graph-row {
       display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 1rem;
+      height: 200px;
+    }
+
+    .graph-column {
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      margin: 0.5rem 0;
     }
 
-    .graph-label {
-      width: 120px;
-      font-weight: bold;
-    }
-
-    .graph-fill {
-      height: 20px;
-      border-radius: 6px;
-      text-align: right;
-      padding-right: 10px;
+    .graph-bar-vertical {
+      width: 40px;
+      transition: height 0.3s ease;
       color: white;
-      font-weight: bold;
-      line-height: 20px;
+      text-align: center;
+      font-size: 0.8rem;
+      padding: 4px 0;
+      border-radius: 5px 5px 0 0;
     }
 
     .performance-bg { background-color: #3498db; }
@@ -237,20 +244,31 @@
         const sorted = [...prefixes].sort((a, b) => data[b][field] - data[a][field]);
         const max = Math.max(...sorted.map(p => data[p][field]));
 
+        const row = document.createElement('div');
+        row.className = 'graph-row';
+
         sorted.forEach(p => {
           const val = data[p][field];
-          const width = (val / max) * 80;
+          const height = (val / max) * 100;
           const machineNum = p.charAt(1);
 
-          const row = document.createElement('div');
-          row.className = 'graph-bar';
-          row.innerHTML = `
-            <div class="graph-label">Machine ${machineNum}</div>
-            <div class="graph-fill ${field.toLowerCase()}-bg" style="width:${width}%;">${val.toFixed(1)}</div>
-          `;
-          section.appendChild(row);
+          const column = document.createElement('div');
+          column.className = 'graph-column';
+
+          const bar = document.createElement('div');
+          bar.className = `graph-bar-vertical ${field.toLowerCase()}-bg`;
+          bar.style.height = `${height}%`;
+          bar.innerText = val.toFixed(1);
+
+          const label = document.createElement('div');
+          label.innerText = `M${machineNum}`;
+
+          column.appendChild(bar);
+          column.appendChild(label);
+          row.appendChild(column);
         });
 
+        section.appendChild(row);
         container.appendChild(section);
       });
     }
@@ -298,5 +316,6 @@
 
     init();
   </script>
+
 </body>
 </html>
