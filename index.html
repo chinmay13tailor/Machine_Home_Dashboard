@@ -19,10 +19,10 @@
     select, button {
       padding: 0.5rem;
       font-size: 1rem;
-      margin: 0.25rem;
+      margin-left: 10px;
     }
 
-    #card-container, #graph-container {
+    #card-container {
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
@@ -99,53 +99,21 @@
     .bar.oee { background-color: #e67e22; }
     .bar.production { background-color: #8e44ad; }
 
-    /* Graph Styles */
-    .graph-section {
-      margin: 1rem;
-      background: #fff;
-      padding: 1rem;
-      border-radius: 10px;
+    #graph-container {
       width: 95%;
       max-width: 1000px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      margin: auto;
+      display: none;
     }
 
-    .graph-section h3 {
-      margin-bottom: 1rem;
+    canvas {
+      margin: 1rem 0;
     }
-
-    .graph-row {
-      display: flex;
-      justify-content: center;
-      align-items: flex-end;
-      gap: 1rem;
-      height: 200px;
-    }
-
-    .graph-column {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .graph-bar-vertical {
-      width: 40px;
-      transition: height 0.3s ease;
-      color: white;
-      text-align: center;
-      font-size: 0.8rem;
-      padding: 4px 0;
-      border-radius: 5px 5px 0 0;
-    }
-
-    .performance-bg { background-color: #3498db; }
-    .availability-bg { background-color: #2ecc71; }
-    .oee-bg { background-color: #e67e22; }
-    .production-bg { background-color: #8e44ad; }
   </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-
   <div id="sort-controls">
     <label for="sort-by">Sort By:</label>
     <select id="sort-by">
@@ -154,12 +122,14 @@
       <option value="OEE">OEE</option>
       <option value="Production">Production</option>
     </select>
-
     <button id="toggle-view">Switch to Graph View</button>
   </div>
 
   <div id="card-container"></div>
-  <div id="graph-container" style="display:none;"></div>
+
+  <div id="graph-container">
+    <canvas id="chart-canvas"></canvas>
+  </div>
 
   <script>
     const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
@@ -170,6 +140,7 @@
     const apiBaseUrl = 'https://thingsboard.cloud/api';
     let currentSortBy = 'Performance';
     let graphView = false;
+    let chart = null;
 
     async function fetchTelemetry() {
       const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
@@ -208,23 +179,18 @@
             <span>Total Time: ${t.TotalTime} Min</span>
           </div>
           <div>SKU: ${t.SKU}</div>
-
           <div class="metric-grid">
             <div class="metric-box"><div>PRODUCTION (PCS)</div><div class="metric-value-green">${t.Production}</div></div>
             <div class="metric-box"><div>KWH CONSUMPTION</div><div class="metric-value-green">${t.KWH} Kwh</div></div>
             <div class="metric-box"><div>MOMENTARY LOSS</div><div class="metric-value-green">${t.MomentaryLoss}</div></div>
             <div class="metric-box"><div>DOWNTIME (MIN)</div><div class="metric-value-red">${t.Downtime}</div></div>
           </div>
-
           <div class="label-bar">PERFORMANCE</div>
           <div class="bar-container"><div class="bar performance" style="width: ${t.Performance}%;"></div></div>
-
           <div class="label-bar">AVAILABILITY</div>
           <div class="bar-container"><div class="bar availability" style="width: ${t.Availability}%;"></div></div>
-
           <div class="label-bar">OEE</div>
           <div class="bar-container"><div class="bar oee" style="width: ${t.OEE}%;"></div></div>
-
           <div class="label-bar">PRODUCTION</div>
           <div class="bar-container"><div class="bar production" style="width: ${t.Production / 20}%;"></div></div>
         `;
@@ -233,68 +199,77 @@
     }
 
     function renderGraph() {
-      const container = document.getElementById('graph-container');
-      container.innerHTML = '';
+      const sorted = [...prefixes].sort((a, b) => data[b][currentSortBy] - data[a][currentSortBy]);
+      const labels = sorted.map(p => `Machine ${p.charAt(1)}`);
+      const values = sorted.map(p => data[p][currentSortBy]);
+      const bgColors = {
+        Performance: '#3498db',
+        Availability: '#2ecc71',
+        OEE: '#e67e22',
+        Production: '#8e44ad'
+      };
 
-      fields.forEach(field => {
-        const section = document.createElement('div');
-        section.className = 'graph-section';
-        section.innerHTML = `<h3>${field}</h3>`;
+      const ctx = document.getElementById('chart-canvas').getContext('2d');
+      if (chart) chart.destroy();
 
-        const sorted = [...prefixes].sort((a, b) => data[b][field] - data[a][field]);
-        const max = Math.max(...sorted.map(p => data[p][field]));
-
-        const row = document.createElement('div');
-        row.className = 'graph-row';
-
-        sorted.forEach(p => {
-          const val = data[p][field];
-          const height = (val / max) * 100;
-          const machineNum = p.charAt(1);
-
-          const column = document.createElement('div');
-          column.className = 'graph-column';
-
-          const bar = document.createElement('div');
-          bar.className = `graph-bar-vertical ${field.toLowerCase()}-bg`;
-          bar.style.height = `${height}%`;
-          bar.innerText = val.toFixed(1);
-
-          const label = document.createElement('div');
-          label.innerText = `M${machineNum}`;
-
-          column.appendChild(bar);
-          column.appendChild(label);
-          row.appendChild(column);
-        });
-
-        section.appendChild(row);
-        container.appendChild(section);
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: currentSortBy,
+            data: values,
+            backgroundColor: bgColors[currentSortBy],
+            borderRadius: 5
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          scales: {
+            x: {
+              beginAtZero: true,
+              title: { display: true, text: currentSortBy },
+              grid: { display: true }
+            },
+            y: {
+              title: { display: true, text: 'Machine' },
+              grid: { display: true }
+            }
+          },
+          plugins: {
+            tooltip: { enabled: true },
+            legend: { display: false },
+            title: {
+              display: true,
+              text: `${currentSortBy} by Machine`,
+              font: { size: 18 }
+            }
+          }
+        }
       });
     }
 
     function refreshView() {
+      const card = document.getElementById('card-container');
+      const graph = document.getElementById('graph-container');
       if (graphView) {
-        document.getElementById('card-container').style.display = 'none';
-        document.getElementById('graph-container').style.display = 'block';
+        card.style.display = 'none';
+        graph.style.display = 'block';
         renderGraph();
       } else {
-        document.getElementById('card-container').style.display = 'flex';
-        document.getElementById('graph-container').style.display = 'none';
+        graph.style.display = 'none';
+        card.style.display = 'flex';
         renderCards();
       }
     }
 
-    async function refreshAndRender() {
-      try {
-        await fetchTelemetry();
-        refreshView();
-      } catch (err) {
-        console.error('Fetch error:', err);
-      }
+    async function refreshAll() {
+      await fetchTelemetry();
+      refreshView();
     }
 
-    document.getElementById('sort-by').addEventListener('change', e => {
+    document.getElementById('sort-by').addEventListener('change', (e) => {
       currentSortBy = e.target.value;
       refreshView();
     });
@@ -310,12 +285,11 @@
         alert('Missing JWT token in URL (?token=...)');
         return;
       }
-      await refreshAndRender();
-      setInterval(refreshAndRender, 5000);
+      await refreshAll();
+      setInterval(refreshAll, 5000);
     }
 
     init();
   </script>
-
 </body>
 </html>
