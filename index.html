@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>Machine Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -12,15 +11,12 @@
       background-color: #f5f5f5;
     }
 
-    #top-bar {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 1rem;
+    #sort-controls {
+      text-align: center;
+      margin-bottom: 1.5rem;
     }
 
-    select, button {
+    select {
       padding: 0.5rem;
       font-size: 1rem;
     }
@@ -48,7 +44,7 @@
       margin-bottom: 0.5rem;
     }
 
-    .dot {
+    .machine-header .dot {
       height: 12px;
       width: 12px;
       background-color: green;
@@ -93,40 +89,18 @@
       overflow: hidden;
     }
 
-    .bar { height: 100%; }
+    .bar {
+      height: 100%;
+    }
+
     .bar.performance { background-color: #3498db; }
     .bar.availability { background-color: #2ecc71; }
     .bar.oee { background-color: #e67e22; }
     .bar.production { background-color: #8e44ad; }
-
-    #chart-container {
-      display: none;
-      max-width: 100%;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .chart-wrapper {
-      width: 100%;
-      max-width: 700px;
-      background: white;
-      padding: 1rem;
-      margin-bottom: 2rem;
-      border-radius: 10px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    canvas {
-      width: 100% !important;
-      height: 300px !important;
-    }
   </style>
 </head>
 <body>
-
-  <div id="top-bar">
+  <div id="sort-controls">
     <label for="sort-by">Sort By:</label>
     <select id="sort-by">
       <option value="Performance">Performance</option>
@@ -134,31 +108,9 @@
       <option value="OEE">OEE</option>
       <option value="Production">Production</option>
     </select>
-    <button id="toggle-view">Switch to Graph View</button>
   </div>
 
-  <!-- Card View -->
   <div id="card-container"></div>
-
-  <!-- Graph View -->
-  <div id="chart-container">
-    <div class="chart-wrapper">
-      <h3>Performance</h3>
-      <canvas id="performanceChart"></canvas>
-    </div>
-    <div class="chart-wrapper">
-      <h3>Availability</h3>
-      <canvas id="availabilityChart"></canvas>
-    </div>
-    <div class="chart-wrapper">
-      <h3>OEE</h3>
-      <canvas id="oeeChart"></canvas>
-    </div>
-    <div class="chart-wrapper">
-      <h3>Production</h3>
-      <canvas id="productionChart"></canvas>
-    </div>
-  </div>
 
   <script>
     const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
@@ -168,8 +120,6 @@
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
     let currentSortBy = 'Performance';
-    let isCardView = true;
-    let charts = {};
 
     async function fetchTelemetry() {
       const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
@@ -194,6 +144,7 @@
     }
 
     function renderCards(sortBy) {
+      currentSortBy = sortBy;
       const container = document.getElementById('card-container');
       container.innerHTML = '';
 
@@ -234,76 +185,18 @@
       });
     }
 
-    function renderGraphs(sortBy) {
-      const metricList = ['Performance', 'Availability', 'OEE', 'Production'];
-      const colors = ['#3498db', '#2ecc71', '#e67e22', '#8e44ad'];
-
-      metricList.forEach((metric, index) => {
-        const ctx = document.getElementById(`${metric.toLowerCase()}Chart`).getContext('2d');
-        const sorted = [...prefixes].sort((a, b) => data[b][sortBy] - data[a][sortBy]);
-
-        const labels = sorted.map(p => p);
-        const values = sorted.map(p => data[p][metric]);
-
-        if (charts[metric]) charts[metric].destroy();
-
-        charts[metric] = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: labels.length ? labels : ['M1', 'M2', 'M3'],
-            datasets: [{
-              label: metric,
-              data: values.length ? values : [0, 0, 0],
-              backgroundColor: colors[index],
-              barThickness: 40
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: {
-                grid: { display: true },
-                title: { display: true, text: 'Machines' }
-              },
-              y: {
-                beginAtZero: true,
-                grid: { display: true },
-                title: { display: true, text: 'Value' }
-              }
-            },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                enabled: true,
-                callbacks: {
-                  label: function (ctx) {
-                    return ` ${ctx.parsed.y}`;
-                  }
-                }
-              }
-            }
-          }
-        });
-      });
-    }
-
-    async function refreshAll() {
-      await fetchTelemetry();
-      isCardView ? renderCards(currentSortBy) : renderGraphs(currentSortBy);
+    async function refreshAndRender() {
+      try {
+        await fetchTelemetry();
+        renderCards(currentSortBy);
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
     }
 
     document.getElementById('sort-by').addEventListener('change', e => {
       currentSortBy = e.target.value;
-      refreshAll();
-    });
-
-    document.getElementById('toggle-view').addEventListener('click', () => {
-      isCardView = !isCardView;
-      document.getElementById('card-container').style.display = isCardView ? 'flex' : 'none';
-      document.getElementById('chart-container').style.display = isCardView ? 'none' : 'flex';
-      document.getElementById('toggle-view').innerText = isCardView ? 'Switch to Graph View' : 'Switch to Card View';
-      refreshAll();
+      renderCards(currentSortBy);
     });
 
     async function init() {
@@ -311,12 +204,11 @@
         alert('Missing JWT token in URL (?token=...)');
         return;
       }
-      await refreshAll();
-      setInterval(refreshAll, 60000); // every 60 sec
+      await refreshAndRender();
+      setInterval(refreshAndRender, 5000); // Auto-refresh every 5 sec
     }
 
     init();
   </script>
-
 </body>
 </html>
