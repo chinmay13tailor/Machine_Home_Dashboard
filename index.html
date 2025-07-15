@@ -16,12 +16,13 @@
       margin-bottom: 1.5rem;
     }
 
-    select {
+    select, button {
       padding: 0.5rem;
       font-size: 1rem;
+      margin: 0.25rem;
     }
 
-    #card-container {
+    #card-container, #graph-container {
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
@@ -97,9 +98,47 @@
     .bar.availability { background-color: #2ecc71; }
     .bar.oee { background-color: #e67e22; }
     .bar.production { background-color: #8e44ad; }
+
+    /* Graph Styles */
+    .graph-section {
+      margin: 1rem;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 10px;
+      width: 95%;
+      max-width: 1000px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .graph-bar {
+      display: flex;
+      align-items: center;
+      margin: 0.5rem 0;
+    }
+
+    .graph-label {
+      width: 120px;
+      font-weight: bold;
+    }
+
+    .graph-fill {
+      height: 20px;
+      border-radius: 6px;
+      text-align: right;
+      padding-right: 10px;
+      color: white;
+      font-weight: bold;
+      line-height: 20px;
+    }
+
+    .performance-bg { background-color: #3498db; }
+    .availability-bg { background-color: #2ecc71; }
+    .oee-bg { background-color: #e67e22; }
+    .production-bg { background-color: #8e44ad; }
   </style>
 </head>
 <body>
+
   <div id="sort-controls">
     <label for="sort-by">Sort By:</label>
     <select id="sort-by">
@@ -108,9 +147,12 @@
       <option value="OEE">OEE</option>
       <option value="Production">Production</option>
     </select>
+
+    <button id="toggle-view">Switch to Graph View</button>
   </div>
 
   <div id="card-container"></div>
+  <div id="graph-container" style="display:none;"></div>
 
   <script>
     const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
@@ -120,6 +162,7 @@
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
     let currentSortBy = 'Performance';
+    let graphView = false;
 
     async function fetchTelemetry() {
       const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
@@ -143,13 +186,10 @@
       });
     }
 
-    function renderCards(sortBy) {
-      currentSortBy = sortBy;
+    function renderCards() {
       const container = document.getElementById('card-container');
       container.innerHTML = '';
-
-      const sorted = [...prefixes].sort((a, b) => data[b][sortBy] - data[a][sortBy]);
-
+      const sorted = [...prefixes].sort((a, b) => data[b][currentSortBy] - data[a][currentSortBy]);
       sorted.forEach(p => {
         const t = data[p];
         const machineNum = p.charAt(1);
@@ -185,10 +225,52 @@
       });
     }
 
+    function renderGraph() {
+      const container = document.getElementById('graph-container');
+      container.innerHTML = '';
+
+      fields.forEach(field => {
+        const section = document.createElement('div');
+        section.className = 'graph-section';
+        section.innerHTML = `<h3>${field}</h3>`;
+
+        const sorted = [...prefixes].sort((a, b) => data[b][field] - data[a][field]);
+        const max = Math.max(...sorted.map(p => data[p][field]));
+
+        sorted.forEach(p => {
+          const val = data[p][field];
+          const width = (val / max) * 80;
+          const machineNum = p.charAt(1);
+
+          const row = document.createElement('div');
+          row.className = 'graph-bar';
+          row.innerHTML = `
+            <div class="graph-label">Machine ${machineNum}</div>
+            <div class="graph-fill ${field.toLowerCase()}-bg" style="width:${width}%;">${val.toFixed(1)}</div>
+          `;
+          section.appendChild(row);
+        });
+
+        container.appendChild(section);
+      });
+    }
+
+    function refreshView() {
+      if (graphView) {
+        document.getElementById('card-container').style.display = 'none';
+        document.getElementById('graph-container').style.display = 'block';
+        renderGraph();
+      } else {
+        document.getElementById('card-container').style.display = 'flex';
+        document.getElementById('graph-container').style.display = 'none';
+        renderCards();
+      }
+    }
+
     async function refreshAndRender() {
       try {
         await fetchTelemetry();
-        renderCards(currentSortBy);
+        refreshView();
       } catch (err) {
         console.error('Fetch error:', err);
       }
@@ -196,7 +278,13 @@
 
     document.getElementById('sort-by').addEventListener('change', e => {
       currentSortBy = e.target.value;
-      renderCards(currentSortBy);
+      refreshView();
+    });
+
+    document.getElementById('toggle-view').addEventListener('click', () => {
+      graphView = !graphView;
+      document.getElementById('toggle-view').innerText = graphView ? 'Switch to Card View' : 'Switch to Graph View';
+      refreshView();
     });
 
     async function init() {
@@ -205,7 +293,7 @@
         return;
       }
       await refreshAndRender();
-      setInterval(refreshAndRender, 5000); // Auto-refresh every 5 sec
+      setInterval(refreshAndRender, 5000);
     }
 
     init();
