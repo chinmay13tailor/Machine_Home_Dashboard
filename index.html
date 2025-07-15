@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Machine Dashboard</title>
+  <title>Machine Dashboard with Graphs</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -23,7 +23,7 @@
     }
 
     #card-container {
-      display: flex;
+      display: none;
       flex-wrap: wrap;
       gap: 1rem;
       justify-content: center;
@@ -38,79 +38,24 @@
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
     }
 
-    .machine-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-
-    .machine-header .dot {
-      height: 12px;
-      width: 12px;
-      background-color: green;
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    .metric-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.5rem;
-      text-align: center;
-      margin: 1rem 0;
-    }
-
-    .metric-box {
-      border: 1px solid #eee;
-      padding: 0.5rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-    }
-
-    .metric-value-green {
-      color: green;
-      font-weight: bold;
-    }
-
-    .metric-value-red {
-      color: red;
-      font-weight: bold;
-    }
-
-    .label-bar {
-      font-size: 0.9rem;
-      margin: 0.3rem 0 0.1rem;
-    }
-
-    .bar-container {
-      background: #eee;
-      height: 10px;
-      border-radius: 5px;
-      overflow: hidden;
-    }
-
-    .bar {
-      height: 100%;
-    }
-
-    .bar.performance { background-color: #3498db; }
-    .bar.availability { background-color: #2ecc71; }
-    .bar.oee { background-color: #e67e22; }
-    .bar.production { background-color: #8e44ad; }
-
-    #graph-container {
+    .graph-section {
       width: 95%;
       max-width: 1000px;
       margin: auto;
-      display: none;
+      margin-bottom: 40px;
     }
 
     canvas {
       margin: 1rem 0;
     }
-  </style>
 
+    .graph-title {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 5px;
+      text-align: center;
+    }
+  </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -122,13 +67,16 @@
       <option value="OEE">OEE</option>
       <option value="Production">Production</option>
     </select>
-    <button id="toggle-view">Switch to Graph View</button>
+    <button id="toggle-view">Switch to Card View</button>
   </div>
 
   <div id="card-container"></div>
 
-  <div id="graph-container">
-    <canvas id="chart-canvas"></canvas>
+  <div id="graphs">
+    <div class="graph-section"><div class="graph-title">Performance</div><canvas id="chart-Performance"></canvas></div>
+    <div class="graph-section"><div class="graph-title">Availability</div><canvas id="chart-Availability"></canvas></div>
+    <div class="graph-section"><div class="graph-title">OEE</div><canvas id="chart-OEE"></canvas></div>
+    <div class="graph-section"><div class="graph-title">Production</div><canvas id="chart-Production"></canvas></div>
   </div>
 
   <script>
@@ -139,8 +87,14 @@
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
     let currentSortBy = 'Performance';
-    let graphView = false;
-    let chart = null;
+    let chartObjects = {};
+
+    const colors = {
+      Performance: '#3498db',
+      Availability: '#2ecc71',
+      OEE: '#e67e22',
+      Production: '#8e44ad'
+    };
 
     async function fetchTelemetry() {
       const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
@@ -154,142 +108,84 @@
           Performance: parseFloat(json[`${p}_Performance`]?.[0]?.value || 0),
           Availability: parseFloat(json[`${p}_Availability`]?.[0]?.value || 0),
           OEE: parseFloat(json[`${p}_OEE`]?.[0]?.value || 0),
-          Production: parseFloat(json[`${p}_Production`]?.[0]?.value || 0),
-          SKU: 'EB8cdse',
-          TotalTime: i === 0 ? 1145 : 0,
-          KWH: i === 0 ? 24.9 : 0.0,
-          Downtime: 22,
-          MomentaryLoss: i === 0 ? 871 : i === 1 ? 1192 : 831
+          Production: parseFloat(json[`${p}_Production`]?.[0]?.value || 0)
         };
       });
     }
 
-    function renderCards() {
-      const container = document.getElementById('card-container');
-      container.innerHTML = '';
-      const sorted = [...prefixes].sort((a, b) => data[b][currentSortBy] - data[a][currentSortBy]);
-      sorted.forEach(p => {
-        const t = data[p];
-        const machineNum = p.charAt(1);
-        const card = document.createElement('div');
-        card.className = 'machine-card';
-        card.innerHTML = `
-          <div class="machine-header">
-            <span><span class="dot"></span> <strong>Machine ${machineNum}</strong></span>
-            <span>Total Time: ${t.TotalTime} Min</span>
-          </div>
-          <div>SKU: ${t.SKU}</div>
-          <div class="metric-grid">
-            <div class="metric-box"><div>PRODUCTION (PCS)</div><div class="metric-value-green">${t.Production}</div></div>
-            <div class="metric-box"><div>KWH CONSUMPTION</div><div class="metric-value-green">${t.KWH} Kwh</div></div>
-            <div class="metric-box"><div>MOMENTARY LOSS</div><div class="metric-value-green">${t.MomentaryLoss}</div></div>
-            <div class="metric-box"><div>DOWNTIME (MIN)</div><div class="metric-value-red">${t.Downtime}</div></div>
-          </div>
-          <div class="label-bar">PERFORMANCE</div>
-          <div class="bar-container"><div class="bar performance" style="width: ${t.Performance}%;"></div></div>
-          <div class="label-bar">AVAILABILITY</div>
-          <div class="bar-container"><div class="bar availability" style="width: ${t.Availability}%;"></div></div>
-          <div class="label-bar">OEE</div>
-          <div class="bar-container"><div class="bar oee" style="width: ${t.OEE}%;"></div></div>
-          <div class="label-bar">PRODUCTION</div>
-          <div class="bar-container"><div class="bar production" style="width: ${t.Production / 20}%;"></div></div>
-        `;
-        container.appendChild(card);
-      });
-    }
+    function renderGraphs() {
+      fields.forEach(field => {
+        const ctx = document.getElementById(`chart-${field}`).getContext('2d');
+        if (chartObjects[field]) chartObjects[field].destroy();
 
-    function renderGraph() {
-      const sorted = [...prefixes].sort((a, b) => data[b][currentSortBy] - data[a][currentSortBy]);
-      const labels = sorted.map(p => `Machine ${p.charAt(1)}`);
-      const values = sorted.map(p => data[p][currentSortBy]);
-      const bgColors = {
-        Performance: '#3498db',
-        Availability: '#2ecc71',
-        OEE: '#e67e22',
-        Production: '#8e44ad'
-      };
+        const sorted = [...prefixes].sort((a, b) => data[b][field] - data[a][field]);
+        const labels = sorted.map(p => p);
+        const values = sorted.map(p => data[p][field]);
 
-      const ctx = document.getElementById('chart-canvas').getContext('2d');
-      if (chart) chart.destroy();
-
-      chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: currentSortBy,
-            data: values,
-            backgroundColor: bgColors[currentSortBy],
-            borderRadius: 5
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          scales: {
-            x: {
-              beginAtZero: true,
-              title: { display: true, text: currentSortBy },
-              grid: { display: true }
-            },
-            y: {
-              title: { display: true, text: 'Machine' },
-              grid: { display: true }
-            }
+        chartObjects[field] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: field,
+              data: values,
+              backgroundColor: colors[field],
+              borderRadius: 5
+            }]
           },
-          plugins: {
-            tooltip: { enabled: true },
-            legend: { display: false },
-            title: {
-              display: true,
-              text: `${currentSortBy} by Machine`,
-              font: { size: 18 }
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            scales: {
+              x: {
+                beginAtZero: true,
+                title: { display: true, text: field },
+                grid: { display: true }
+              },
+              y: {
+                title: { display: true, text: 'Machine' },
+                grid: { display: true }
+              }
+            },
+            plugins: {
+              tooltip: { enabled: true },
+              legend: { display: false }
             }
           }
-        }
+        });
       });
     }
 
-    function refreshView() {
-      const card = document.getElementById('card-container');
-      const graph = document.getElementById('graph-container');
-      if (graphView) {
-        card.style.display = 'none';
+    document.getElementById('toggle-view').addEventListener('click', () => {
+      const graph = document.getElementById('graphs');
+      const cards = document.getElementById('card-container');
+      const button = document.getElementById('toggle-view');
+      if (graph.style.display === 'none') {
         graph.style.display = 'block';
-        renderGraph();
+        cards.style.display = 'none';
+        button.textContent = 'Switch to Card View';
+        renderGraphs();
       } else {
         graph.style.display = 'none';
-        card.style.display = 'flex';
-        renderCards();
+        cards.style.display = 'flex';
+        button.textContent = 'Switch to Graph View';
       }
-    }
-
-    async function refreshAll() {
-      await fetchTelemetry();
-      refreshView();
-    }
-
-    document.getElementById('sort-by').addEventListener('change', (e) => {
-      currentSortBy = e.target.value;
-      refreshView();
-    });
-
-    document.getElementById('toggle-view').addEventListener('click', () => {
-      graphView = !graphView;
-      document.getElementById('toggle-view').innerText = graphView ? 'Switch to Card View' : 'Switch to Graph View';
-      refreshView();
     });
 
     async function init() {
       if (!jwt) {
-        alert('Missing JWT token in URL (?token=...)');
+        alert('Missing token in URL (?token=...)');
         return;
       }
-      await refreshAll();
-      setInterval(refreshAll, 5000);
+      await fetchTelemetry();
+      renderGraphs();
     }
 
     init();
+    setInterval(async () => {
+      await fetchTelemetry();
+      renderGraphs();
+    }, 5000);
   </script>
 </body>
 </html>
