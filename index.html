@@ -98,20 +98,30 @@
     .bar.oee { background-color: #e67e22; }
     .bar.production { background-color: #8e44ad; }
 
-    #chart-container {
-      display: none;
-      max-width: 100%;
-      padding: 1rem;
-    }
+#chart-container {
+  display: none;
+  max-width: 100%;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
-    .chart-wrapper {
-      margin-bottom: 40px;
-    }
+.chart-wrapper {
+  width: 100%;
+  max-width: 700px;
+  background: white;
+  padding: 1rem;
+  margin-bottom: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
 
-    canvas {
-      width: 100% !important;
-      height: 300px !important;
-    }
+canvas {
+  width: 100% !important;
+  height: 300px !important;
+}
+
   </style>
 </head>
 <body>
@@ -230,54 +240,45 @@ function renderCards(sortBy) {
   });
 }
 
-function renderGraphs(sortBy) {
-  const metricList = ['Performance', 'Availability', 'OEE', 'Production'];
-  const colors = ['#3498db', '#2ecc71', '#e67e22', '#8e44ad'];
-
-  metricList.forEach((metric, index) => {
-    const ctx = document.getElementById(`${metric.toLowerCase()}Chart`).getContext('2d');
-    const sorted = [...prefixes].sort((a, b) => data[b][sortBy] - data[a][sortBy]);
-
-    const labels = sorted.map(p => p);
-    const values = sorted.map(p => data[p][metric]);
-
-    if (charts[metric]) charts[metric].destroy();
-
-    charts[metric] = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: metric,
-          data: values,
-          backgroundColor: colors[index]
-        }]
+charts[metric] = new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: labels.length ? labels : ['M1', 'M2', 'M3'], // fallback
+    datasets: [{
+      label: metric,
+      data: values.length ? values : [0, 0, 0], // fallback
+      backgroundColor: colors[index],
+      barThickness: 40, // prevent stretching
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        grid: { display: true },
+        title: { display: true, text: 'Machines' }
       },
-      options: {
-        responsive: true,
-        scales: {
-          x: { grid: { display: true } },
-          y: {
-            beginAtZero: true,
-            grid: { display: true },
-            title: { display: true, text: 'Value' }
-          }
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            enabled: true,
-            callbacks: {
-              label: function (ctx) {
-                return ` ${ctx.parsed.y}`;
-              }
-            }
+      y: {
+        beginAtZero: true,
+        grid: { display: true },
+        title: { display: true, text: 'Value' }
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        enabled: true,
+        callbacks: {
+          label: function (ctx) {
+            return ` ${ctx.parsed.y}`;
           }
         }
       }
-    });
-  });
-}
+    }
+  }
+});
+
 
 async function refreshAndRender() {
   try {
