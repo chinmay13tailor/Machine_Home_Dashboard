@@ -23,7 +23,7 @@
     }
 
     #card-container {
-      display: none;
+      display: flex;
       flex-wrap: wrap;
       gap: 1rem;
       justify-content: center;
@@ -37,6 +37,67 @@
       width: 300px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
     }
+
+    .machine-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .machine-header .dot {
+      height: 12px;
+      width: 12px;
+      background-color: green;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      text-align: center;
+      margin: 1rem 0;
+    }
+
+    .metric-box {
+      border: 1px solid #eee;
+      padding: 0.5rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .metric-value-green {
+      color: green;
+      font-weight: bold;
+    }
+
+    .metric-value-red {
+      color: red;
+      font-weight: bold;
+    }
+
+    .label-bar {
+      font-size: 0.9rem;
+      margin: 0.3rem 0 0.1rem;
+    }
+
+    .bar-container {
+      background: #eee;
+      height: 10px;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .bar {
+      height: 100%;
+    }
+
+    .bar.performance { background-color: #3498db; }
+    .bar.availability { background-color: #2ecc71; }
+    .bar.oee { background-color: #e67e22; }
+    .bar.production { background-color: #8e44ad; }
 
     .graph-section {
       width: 95%;
@@ -55,6 +116,10 @@
       margin-bottom: 5px;
       text-align: center;
     }
+
+    #graphs {
+      display: none;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -67,7 +132,7 @@
       <option value="OEE">OEE</option>
       <option value="Production">Production</option>
     </select>
-    <button id="toggle-view">Switch to Card View</button>
+    <button id="toggle-view">Switch to Graph View</button>
   </div>
 
   <div id="card-container"></div>
@@ -108,8 +173,54 @@
           Performance: parseFloat(json[`${p}_Performance`]?.[0]?.value || 0),
           Availability: parseFloat(json[`${p}_Availability`]?.[0]?.value || 0),
           OEE: parseFloat(json[`${p}_OEE`]?.[0]?.value || 0),
-          Production: parseFloat(json[`${p}_Production`]?.[0]?.value || 0)
+          Production: parseFloat(json[`${p}_Production`]?.[0]?.value || 0),
+          SKU: 'EB8cdse',
+          TotalTime: i === 0 ? 1145 : 0,
+          KWH: i === 0 ? 24.9 : 0.0,
+          Downtime: 22,
+          MomentaryLoss: i === 0 ? 871 : i === 1 ? 1192 : 831
         };
+      });
+    }
+
+    function renderCards(sortBy) {
+      const container = document.getElementById('card-container');
+      container.innerHTML = '';
+
+      const sorted = [...prefixes].sort((a, b) => data[b][sortBy] - data[a][sortBy]);
+
+      sorted.forEach(p => {
+        const t = data[p];
+        const machineNum = p.charAt(1);
+        const card = document.createElement('div');
+        card.className = 'machine-card';
+        card.innerHTML = `
+          <div class="machine-header">
+            <span><span class="dot"></span> <strong>Machine ${machineNum}</strong></span>
+            <span>Total Time: ${t.TotalTime} Min</span>
+          </div>
+          <div>SKU: ${t.SKU}</div>
+
+          <div class="metric-grid">
+            <div class="metric-box"><div>PRODUCTION (PCS)</div><div class="metric-value-green">${t.Production}</div></div>
+            <div class="metric-box"><div>KWH CONSUMPTION</div><div class="metric-value-green">${t.KWH} Kwh</div></div>
+            <div class="metric-box"><div>MOMENTARY LOSS</div><div class="metric-value-green">${t.MomentaryLoss}</div></div>
+            <div class="metric-box"><div>DOWNTIME (MIN)</div><div class="metric-value-red">${t.Downtime}</div></div>
+          </div>
+
+          <div class="label-bar">PERFORMANCE</div>
+          <div class="bar-container"><div class="bar performance" style="width: ${t.Performance}%;"></div></div>
+
+          <div class="label-bar">AVAILABILITY</div>
+          <div class="bar-container"><div class="bar availability" style="width: ${t.Availability}%;"></div></div>
+
+          <div class="label-bar">OEE</div>
+          <div class="bar-container"><div class="bar oee" style="width: ${t.OEE}%;"></div></div>
+
+          <div class="label-bar">PRODUCTION</div>
+          <div class="bar-container"><div class="bar production" style="width: ${t.Production / 20}%;"></div></div>
+        `;
+        container.appendChild(card);
       });
     }
 
@@ -134,7 +245,6 @@
             }]
           },
           options: {
-            indexAxis: 'y',
             responsive: true,
             scales: {
               x: {
@@ -143,7 +253,7 @@
                 grid: { display: true }
               },
               y: {
-                title: { display: true, text: 'Machine' },
+                title: { display: true, text: 'Machines' },
                 grid: { display: true }
               }
             },
@@ -156,36 +266,48 @@
       });
     }
 
+    // View toggle
     document.getElementById('toggle-view').addEventListener('click', () => {
       const graph = document.getElementById('graphs');
       const cards = document.getElementById('card-container');
-      const button = document.getElementById('toggle-view');
+      const btn = document.getElementById('toggle-view');
       if (graph.style.display === 'none') {
         graph.style.display = 'block';
         cards.style.display = 'none';
-        button.textContent = 'Switch to Card View';
+        btn.textContent = 'Switch to Card View';
         renderGraphs();
       } else {
         graph.style.display = 'none';
         cards.style.display = 'flex';
-        button.textContent = 'Switch to Graph View';
+        btn.textContent = 'Switch to Graph View';
+        renderCards(currentSortBy);
       }
     });
+
+    document.getElementById('sort-by').addEventListener('change', e => {
+      currentSortBy = e.target.value;
+      renderCards(currentSortBy);
+    });
+
+    async function refreshAndRender() {
+      await fetchTelemetry();
+      if (document.getElementById('graphs').style.display === 'none') {
+        renderCards(currentSortBy);
+      } else {
+        renderGraphs();
+      }
+    }
 
     async function init() {
       if (!jwt) {
         alert('Missing token in URL (?token=...)');
         return;
       }
-      await fetchTelemetry();
-      renderGraphs();
+      await refreshAndRender();
+      setInterval(refreshAndRender, 5000);
     }
 
     init();
-    setInterval(async () => {
-      await fetchTelemetry();
-      renderGraphs();
-    }, 5000);
   </script>
 </body>
 </html>
