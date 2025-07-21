@@ -2,213 +2,124 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Machine Dashboard</title>
+  <title>Customer Machine Filter</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 0;
+      padding: 2rem;
+      background: #f2f2f2;
+    }
+    .filter-section {
+      display: flex;
+      flex-direction: column;
+      max-width: 500px;
+      margin: auto;
+      background: #fff;
       padding: 1rem;
-      background-color: #f5f5f5;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-
-    #sort-controls {
-      text-align: center;
-      margin-bottom: 1.5rem;
+    label {
+      margin-top: 10px;
+      font-weight: bold;
     }
-
-    select {
-      padding: 0.5rem;
+    input, select, button {
+      margin-top: 5px;
+      padding: 8px;
       font-size: 1rem;
     }
-
-    #card-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      justify-content: flex-start;
+    button {
+      cursor: pointer;
+      background: orange;
+      color: white;
+      border: none;
     }
-
-    .machine-card {
-      border: 2px solid #ffcc00;
-      border-radius: 10px;
-      background-color: #fff;
-      padding: 1rem;
-      width: 300px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .machine-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-
-    .machine-header .dot {
-      height: 12px;
-      width: 12px;
-      background-color: green;
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    .metric-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.5rem;
-      text-align: center;
-      margin: 1rem 0;
-    }
-
-    .metric-box {
-      border: 1px solid #eee;
-      padding: 0.5rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-    }
-
-    .metric-value-green {
-      color: green;
-      font-weight: bold;
-    }
-
-    .metric-value-red {
-      color: red;
-      font-weight: bold;
-    }
-
-    .label-bar {
-      font-size: 0.9rem;
-      margin: 0.3rem 0 0.1rem;
-    }
-
-    .bar-container {
-      background: #eee;
-      height: 10px;
-      border-radius: 5px;
-      overflow: hidden;
-    }
-
-    .bar {
-      height: 100%;
-    }
-
-    .bar.performance { background-color: #3498db; }
-    .bar.availability { background-color: #2ecc71; }
-    .bar.oee { background-color: #e67e22; }
-    .bar.production { background-color: #8e44ad; }
   </style>
 </head>
 <body>
-  <div id="sort-controls">
-    <label for="sort-by">Sort By:</label>
-    <select id="sort-by">
-      <option value="Performance">Performance</option>
-      <option value="Availability">Availability</option>
-      <option value="OEE">OEE</option>
-      <option value="Production">Production</option>
+
+  <div class="filter-section">
+    <label>Start Date</label>
+    <input type="datetime-local" id="startDate">
+
+    <label>End Date</label>
+    <input type="datetime-local" id="endDate">
+
+    <button onclick="getCustomers()">Get Customer</button>
+
+    <label>Select Customer</label>
+    <select id="customerSelect">
+      <option>Select customer</option>
+    </select>
+
+    <button onclick="getMachines()">Get Machine</button>
+
+    <label>Select Machine</label>
+    <select id="machineSelect">
+      <option>Select machine</option>
     </select>
   </div>
 
-  <div id="card-container"></div>
-
   <script>
-    const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
-    const prefixes = ['M1', 'M2', 'M3'];
-    const fields = ['Performance', 'Availability', 'OEE', 'Production'];
-    const data = {};
-    const jwt = new URLSearchParams(window.location.search).get('token');
-    const apiBaseUrl = 'https://thingsboard.cloud/api';
-    let currentSortBy = 'Performance';
+    const deviceToken = "Skp2xAAE3OqhqKHTMhLY";
+    const baseUrl = "https://thingsboard.cloud";
+    const telemetryKeys = ["Customer", "Machine"];
+    let allData = [];
 
-    async function fetchTelemetry() {
-      const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
-      const res = await fetch(`${apiBaseUrl}/plugins/telemetry/DEVICE/${deviceId}/values/timeseries?keys=${keys}`, {
-        headers: { 'X-Authorization': `Bearer ${jwt}` }
-      });
-      const json = await res.json();
+    async function fetchTelemetry(startTs, endTs) {
+      const keys = telemetryKeys.join(",");
+      const url = `${baseUrl}/api/v1/${deviceToken}/telemetry?keys=${keys}&startTs=${startTs}&endTs=${endTs}&interval=1000&limit=1000&agg=NONE`;
 
-      prefixes.forEach((p, i) => {
-        data[p] = {
-          Performance: parseFloat(json[`${p}_Performance`]?.[0]?.value || 0),
-          Availability: parseFloat(json[`${p}_Availability`]?.[0]?.value || 0),
-          OEE: parseFloat(json[`${p}_OEE`]?.[0]?.value || 0),
-          Production: parseFloat(json[`${p}_Production`]?.[0]?.value || 0),
-          SKU: 'EB8cdse',
-          TotalTime: i === 0 ? 1145 : 0,
-          KWH: i === 0 ? 24.9 : 0.0,
-          Downtime: 22,
-          MomentaryLoss: i === 0 ? 871 : i === 1 ? 1192 : 831
-        };
-      });
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch telemetry");
+      return await res.json();
     }
 
-    function renderCards(sortBy) {
-      currentSortBy = sortBy;
-      const container = document.getElementById('card-container');
-      container.innerHTML = '';
-
-      const sorted = [...prefixes].sort((a, b) => data[b][sortBy] - data[a][sortBy]);
-
-      sorted.forEach(p => {
-        const t = data[p];
-        const machineNum = p.charAt(1);
-        const card = document.createElement('div');
-        card.className = 'machine-card';
-        card.innerHTML = `
-          <div class="machine-header">
-            <span><span class="dot"></span> <strong>Machine ${machineNum}</strong></span>
-            <span>Total Time: ${t.TotalTime} Min</span>
-          </div>
-          <div>SKU: ${t.SKU}</div>
-
-          <div class="metric-grid">
-            <div class="metric-box"><div>PRODUCTION (PCS)</div><div class="metric-value-green">${t.Production}</div></div>
-            <div class="metric-box"><div>KWH CONSUMPTION</div><div class="metric-value-green">${t.KWH} Kwh</div></div>
-            <div class="metric-box"><div>MOMENTARY LOSS</div><div class="metric-value-green">${t.MomentaryLoss}</div></div>
-            <div class="metric-box"><div>DOWNTIME (MIN)</div><div class="metric-value-red">${t.Downtime}</div></div>
-          </div>
-
-          <div class="label-bar">PERFORMANCE</div>
-          <div class="bar-container"><div class="bar performance" style="width: ${t.Performance}%;"></div></div>
-
-          <div class="label-bar">AVAILABILITY</div>
-          <div class="bar-container"><div class="bar availability" style="width: ${t.Availability}%;"></div></div>
-
-          <div class="label-bar">OEE</div>
-          <div class="bar-container"><div class="bar oee" style="width: ${t.OEE}%;"></div></div>
-
-          <div class="label-bar">PRODUCTION</div>
-          <div class="bar-container"><div class="bar production" style="width: ${t.Production / 20}%;"></div></div>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    async function refreshAndRender() {
+    async function getCustomers() {
       try {
-        await fetchTelemetry();
-        renderCards(currentSortBy);
+        const start = new Date(document.getElementById("startDate").value).getTime();
+        const end = new Date(document.getElementById("endDate").value).getTime();
+        if (!start || !end) return alert("Please select both start and end date.");
+
+        const data = await fetchTelemetry(start, end);
+        const customers = data.Customer?.map(d => d.value) || [];
+        const machines = data.Machine?.map(d => d.value) || [];
+
+        allData = customers.map((cust, i) => ({
+          customer: cust,
+          machine: machines[i] || "Unknown"
+        }));
+
+        const uniqueCustomers = [...new Set(customers)];
+        const customerSelect = document.getElementById("customerSelect");
+        customerSelect.innerHTML = "<option>Select customer</option>";
+        uniqueCustomers.forEach(c => {
+          const option = document.createElement("option");
+          option.value = c;
+          option.textContent = c;
+          customerSelect.appendChild(option);
+        });
+
       } catch (err) {
-        console.error('Fetch error:', err);
+        console.error("Error fetching customers:", err);
+        alert("Telemetry fetch failed.");
       }
     }
 
-    document.getElementById('sort-by').addEventListener('change', e => {
-      currentSortBy = e.target.value;
-      renderCards(currentSortBy);
-    });
+    function getMachines() {
+      const selectedCustomer = document.getElementById("customerSelect").value;
+      const filtered = allData.filter(d => d.customer === selectedCustomer);
+      const machines = [...new Set(filtered.map(d => d.machine))];
 
-    async function init() {
-      if (!jwt) {
-        alert('Missing JWT token in URL (?token=...)');
-        return;
-      }
-      await refreshAndRender();
-      setInterval(refreshAndRender, 5000); // Auto-refresh every 5 sec
+      const machineSelect = document.getElementById("machineSelect");
+      machineSelect.innerHTML = "<option>Select machine</option>";
+      machines.forEach(m => {
+        const option = document.createElement("option");
+        option.value = m;
+        option.textContent = m;
+        machineSelect.appendChild(option);
+      });
     }
-
-    init();
   </script>
 </body>
 </html>
