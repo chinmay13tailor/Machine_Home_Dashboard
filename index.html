@@ -5,36 +5,28 @@
   <title>Advanced Machine Dashboard</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
       padding: 1rem;
-      background-color: #f5f5f5;
+      background-color: #121212;
+      color: #e0e0e0;
     }
 
     #sort-controls {
-      text-align: center;
-      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      margin-bottom: 1rem;
     }
-
+    #sort-controls label,
+    #sort-controls select {
+      margin-right: 0.5rem;
+    }
     select {
-      padding: 0.5rem;
-      font-size: 1rem;
-    }
-
-    .refresh-icon {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      margin-left: 10px;
-      animation: spin 1s linear infinite;
-    }
-
-    .refresh-icon.paused {
-      animation: none;
-    }
-
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
+      padding: 0.4rem;
+      border-radius: 5px;
+      border: none;
+      background-color: #1f1f1f;
+      color: #e0e0e0;
     }
 
     #card-container {
@@ -45,77 +37,79 @@
     }
 
     .machine-card {
-      border: 2px solid #ffcc00;
+      background-color: #1f1f1f;
       border-radius: 10px;
-      background-color: #fff;
       padding: 1rem;
-      width: 300px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      width: 280px;
+      transition: transform 0.2s;
+    }
+    .machine-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.5);
     }
 
     .machine-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.7rem;
     }
-
-    .dot {
-      height: 12px;
-      width: 12px;
-      border-radius: 50%;
-      display: inline-block;
+    .badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
     }
-
-    .green { background-color: green; }
-    .orange { background-color: orange; }
-    .red { background-color: red; }
-    .gray { background-color: gray; }
+    .badge.green { background-color: #2ecc71; }
+    .badge.orange { background-color: #e67e22; }
+    .badge.red { background-color: #e74c3c; }
+    .badge.gray { background-color: #7f8c8d; }
 
     .metric-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 0.5rem;
-      text-align: center;
-      margin: 1rem 0;
+      margin-bottom: 1rem;
     }
-
     .metric-box {
-      border: 1px solid #eee;
-      padding: 0.5rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-    }
-
-    .metric-value-green {
-      color: green;
-      font-weight: bold;
-    }
-
-    .metric-value-red {
-      color: red;
-      font-weight: bold;
-    }
-
-    .circle-wrapper {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 10px;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .circle-box {
+      background-color: #282828;
+      border-radius: 8px;
+      padding: 0.6rem;
+      font-size: 0.85rem;
       text-align: center;
-      flex: 1;
     }
-
-    svg {
-      width: 60px;
-      height: 60px;
+    .metric-box .value {
+      display: block;
+      font-weight: bold;
+      font-size: 1.1rem;
+      margin-top: 0.2rem;
     }
+    .value.good { color: #2ecc71; }
+    .value.bad { color: #e74c3c; }
 
-    @media screen and (max-width: 600px) {
+    .bar-label {
+      font-size: 0.8rem;
+      margin-bottom: 0.2rem;
+      opacity: 0.8;
+    }
+    .bar-container {
+      background-color: #282828;
+      border-radius: 5px;
+      overflow: hidden;
+      height: 8px;
+      margin-bottom: 0.6rem;
+    }
+    .bar {
+      height: 100%;
+      border-radius: 5px;
+      transition: width 1s ease;
+    }
+    .bar.performance { background: linear-gradient(90deg, #3498db, #2980b9); }
+    .bar.availability { background: linear-gradient(90deg, #2ecc71, #27ae60); }
+    .bar.oee { background: linear-gradient(90deg, #e67e22, #d35400); }
+    .bar.production { background: linear-gradient(90deg, #9b59b6, #8e44ad); }
+
+    @media screen and (max-width: 640px) {
       .machine-card {
         width: 100%;
       }
@@ -131,22 +125,24 @@
       <option value="OEE">OEE</option>
       <option value="Production">Production</option>
     </select>
-    <img src="https://img.icons8.com/ios/50/000000/refresh.png" class="refresh-icon paused" id="refresh-icon" />
   </div>
 
   <div id="card-container"></div>
 
   <script>
     const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
-    const prefixes = ['M1', 'M2', 'M3'];
-    const fields = ['Performance', 'Availability', 'OEE', 'Production', 'Status'];
+    const prefixes = ['M1','M2','M3'];
+    const metrics = ['Performance','Availability','OEE','Production','Status'];
     const data = {};
     const jwt = new URLSearchParams(window.location.search).get('token');
-    const apiBaseUrl = 'https://thingsboard.cloud/api';
-    let currentSortBy = 'Performance';
+    const apiUrl = 'https://thingsboard.cloud/api';
+    let sortBy = 'Performance';
 
-    function getStatusColor(status) {
-      switch (status) {
+    function colorCategory(val, threshold=70) {
+      return val >= threshold ? 'value good' : 'value bad';
+    }
+    function statusBadge(v) {
+      switch(v) {
         case 'Running': return 'green';
         case 'Idle': return 'orange';
         case 'Stopped': return 'red';
@@ -154,117 +150,66 @@
       }
     }
 
-    function getMetricClass(value, threshold = 50) {
-      return value >= threshold ? 'metric-value-green' : 'metric-value-red';
-    }
-
-    function createCircle(metric, value, color) {
-      const radius = 25;
-      const stroke = 4;
-      const normalized = Math.min(100, Math.max(0, value));
-      const circumference = 2 * Math.PI * radius;
-      const dash = (normalized / 100) * circumference;
-
-      return `
-        <div class="circle-box">
-          <svg>
-            <circle cx="30" cy="30" r="${radius}" stroke="#eee" stroke-width="${stroke}" fill="none" />
-            <circle cx="30" cy="30" r="${radius}" stroke="${color}" stroke-width="${stroke}" fill="none"
-              stroke-dasharray="${dash} ${circumference - dash}" stroke-linecap="round" transform="rotate(-90 30 30)" />
-          </svg>
-          <div style="font-size: 0.8rem;">${metric}<br/><strong>${value}%</strong></div>
-        </div>`;
-    }
-
-    async function fetchTelemetry() {
-      const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
-      const res = await fetch(`${apiBaseUrl}/plugins/telemetry/DEVICE/${deviceId}/values/timeseries?keys=${keys}`, {
+    async function fetchData() {
+      const keys = prefixes.map(p =>
+        metrics.map(m => `${p}_${m}`)).flat().join(',');
+      const res = await fetch(`${apiUrl}/plugins/telemetry/DEVICE/${deviceId}/values/timeseries?keys=${keys}`, {
         headers: { 'X-Authorization': `Bearer ${jwt}` }
       });
       const json = await res.json();
-
-      prefixes.forEach((p, i) => {
-        data[p] = {
-          Performance: parseFloat(json[`${p}_Performance`]?.[0]?.value || 0),
-          Availability: parseFloat(json[`${p}_Availability`]?.[0]?.value || 0),
-          OEE: parseFloat(json[`${p}_OEE`]?.[0]?.value || 0),
-          Production: parseFloat(json[`${p}_Production`]?.[0]?.value || 0),
-          Status: json[`${p}_Status`]?.[0]?.value || 'Unknown',
-          SKU: 'EB8cdse',
-          TotalTime: i === 0 ? 1145 : 0,
-          KWH: i === 0 ? 24.9 : 0.0,
-          Downtime: 22,
-          MomentaryLoss: i === 0 ? 871 : i === 1 ? 1192 : 831
-        };
+      prefixes.forEach((p,i) => {
+        const obj = metrics.reduce((acc,m) => {
+          acc[m] = m==='Status' ? json[`${p}_${m}`]?.[0]?.value : parseFloat(json[`${p}_${m}`]?.[0]?.value) || 0;
+          return acc;
+        }, {});
+        obj.SKU='EB8cdse'; obj.TotalTime= i===0?1145:0; obj.KWH=i===0?24.9:0;
+        obj.Downtime=22; obj.MomentaryLoss = i===0?871:i===1?1192:831;
+        data[p] = obj;
       });
     }
 
-    function renderCards(sortBy) {
+    function render() {
       const container = document.getElementById('card-container');
       container.innerHTML = '';
-
-      const sorted = [...prefixes].sort((a, b) => data[b][sortBy] - data[a][sortBy]);
-
-      sorted.forEach(p => {
-        const t = data[p];
-        const machineNum = p.charAt(1);
+      prefixes.sort((a,b) => data[b][sortBy] - data[a][sortBy]).forEach(p => {
+        const t = data[p], n=p.slice(1);
+        const badgeClr = statusBadge(t.Status);
+        const cgood = val => colorCategory(val);
         const card = document.createElement('div');
-        card.className = 'machine-card';
-        const statusColor = getStatusColor(t.Status);
-
-        card.innerHTML = `
+        card.className='machine-card';
+        card.innerHTML=`
           <div class="machine-header">
-            <span><span class="dot ${statusColor}"></span> <strong>Machine ${machineNum}</strong></span>
-            <span>Total Time: ${t.TotalTime} Min</span>
+            <div><strong>Machine ${n}</strong></div>
+            <div class="badge ${badgeClr}">${t.Status}</div>
           </div>
-          <div>SKU: ${t.SKU}</div>
-
           <div class="metric-grid">
-            <div class="metric-box"><div>PRODUCTION (PCS)</div><div class="${getMetricClass(t.Production)}">${t.Production}</div></div>
-            <div class="metric-box"><div>KWH CONSUMPTION</div><div class="metric-value-green">${t.KWH} Kwh</div></div>
-            <div class="metric-box"><div>MOMENTARY LOSS</div><div class="metric-value-green">${t.MomentaryLoss}</div></div>
-            <div class="metric-box"><div>DOWNTIME (MIN)</div><div class="metric-value-red">${t.Downtime}</div></div>
+            <div class="metric-box"><label>PRODUCTION</label><span class="${cgood(t.Production)}">${t.Production}</span></div>
+            <div class="metric-box"><label>KWH</label><span class="value good">${t.KWH}</span></div>
+            <div class="metric-box"><label>MOMENTARY LOSS</label><span class="value bad">${t.MomentaryLoss}</span></div>
+            <div class="metric-box"><label>DOWNTIME</label><span class="value bad">${t.Downtime}</span></div>
           </div>
-
-          <div class="circle-wrapper">
-            ${createCircle('Performance', t.Performance, '#3498db')}
-            ${createCircle('Availability', t.Availability, '#2ecc71')}
-            ${createCircle('OEE', t.OEE, '#e67e22')}
-            ${createCircle('Production', t.Production / 2, '#8e44ad')}
-          </div>
+          ${['Performance','Availability','OEE','Production'].map(m => `
+            <div class="bar-label">${m}</div>
+            <div class="bar-container">
+              <div class="bar ${m.toLowerCase()}" style="width: ${m==='Production'?Math.min(t[m]/2,100):t[m]}%;"></div>
+            </div>`).join('')}
         `;
         container.appendChild(card);
       });
     }
 
-    async function refreshAndRender() {
-      const icon = document.getElementById('refresh-icon');
-      icon.classList.remove('paused');
-      try {
-        await fetchTelemetry();
-        renderCards(currentSortBy);
-      } catch (err) {
-        console.error('Fetch error:', err);
-      } finally {
-        icon.classList.add('paused');
-      }
+    async function refresh() {
+      await fetchData();
+      render();
     }
 
-    document.getElementById('sort-by').addEventListener('change', e => {
-      currentSortBy = e.target.value;
-      renderCards(currentSortBy);
-    });
+    document.getElementById('sort-by').onchange = e => {
+      sortBy = e.target.value;
+      render();
+    };
 
-    async function init() {
-      if (!jwt) {
-        alert('Missing JWT token in URL (?token=...)');
-        return;
-      }
-      await refreshAndRender();
-      setInterval(refreshAndRender, 5000);
-    }
-
-    init();
+    if (!jwt) alert('Missing token! Add ?token=YOURJWT');
+    else { refresh(); setInterval(refresh,5000); }
   </script>
 </body>
 </html>
