@@ -2,19 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Modern Machine Dashboard</title>
+  <title>Machine Dashboard</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
       margin: 0;
       padding: 2rem;
-      background: linear-gradient(to right, #f9f9f9, #e0eaff);
+      background: linear-gradient(to right, #f2f2f2, #e0eaff);
       color: #333;
     }
 
+    .section-box {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
     #sort-controls {
-      text-align: left;
-      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    #sort-controls label {
+      font-weight: bold;
+      font-size: 1rem;
     }
 
     select {
@@ -22,8 +36,14 @@
       font-size: 1rem;
       border: 1px solid #ccc;
       border-radius: 8px;
-      background: #fff;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      background: #f7f7f7;
+    }
+
+    #card-container-box {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 1rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
     }
 
     #card-container {
@@ -34,17 +54,16 @@
     }
 
     .machine-card {
-      background: linear-gradient(145deg, #ffffff, #f0f0f0);
+      background: #FFFFC7;
       border-radius: 16px;
       width: 300px;
       padding: 1.2rem;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+      transition: transform 0.2s ease;
     }
 
     .machine-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 12px 25px rgba(0,0,0,0.15);
+      transform: translateY(-6px);
     }
 
     .machine-header {
@@ -52,10 +71,6 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
-      background: rgba(255, 255, 255, 0.6);
-      backdrop-filter: blur(5px);
-      border-radius: 12px;
-      padding: 0.5rem 1rem;
     }
 
     .dot {
@@ -77,17 +92,16 @@
     }
 
     .metric-box {
-      background: #ffffff;
-      border: 1px solid #e3e3e3;
+      background: #fffdf4;
+      border: 1px solid #ddd;
       border-radius: 12px;
       padding: 0.8rem;
       text-align: center;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
     }
 
     .metric-box div:first-child {
       font-size: 0.85rem;
-      color: #888;
+      color: #666;
     }
 
     .metric-box div:last-child {
@@ -100,7 +114,7 @@
 
     .label-bar {
       font-size: 0.85rem;
-      margin-top: 0.9rem;
+      margin-top: 0.8rem;
     }
 
     .bar-container {
@@ -130,29 +144,33 @@
   </style>
 </head>
 <body>
-  <div id="sort-controls">
-    <label for="sort-by">Sort By:</label>
-    <select id="sort-by">
-      <option value="Performance">Performance</option>
-      <option value="Availability">Availability</option>
-      <option value="OEE">OEE</option>
-      <option value="Production">Production</option>
-    </select>
+  <div class="section-box" id="sort-section">
+    <div id="sort-controls">
+      <label for="sort-by">Sort By:</label>
+      <select id="sort-by">
+        <option value="Performance">Performance</option>
+        <option value="Availability">Availability</option>
+        <option value="OEE">OEE</option>
+        <option value="Production">Production</option>
+      </select>
+    </div>
   </div>
 
-  <div id="card-container"></div>
+  <div id="card-container-box">
+    <div id="card-container"></div>
+  </div>
 
   <script>
     const deviceId = '1250b550-5bdb-11f0-9b14-15d3b3a473c1';
-    const prefixes = ['M1','M2','M3'];
-    const metrics = ['Performance','Availability','OEE','Production','Status'];
+    const prefixes = ['M1', 'M2', 'M3'];
+    const fields = ['Performance', 'Availability', 'OEE', 'Production', 'Status'];
     const data = {};
     const jwt = new URLSearchParams(window.location.search).get('token');
     const apiBaseUrl = 'https://thingsboard.cloud/api';
-    let sortBy = 'Performance';
+    let currentSortBy = 'Performance';
 
     function getStatusColor(status) {
-      switch(status) {
+      switch (status) {
         case 'Running': return 'green';
         case 'Idle': return 'orange';
         case 'Stopped': return 'red';
@@ -161,7 +179,7 @@
     }
 
     async function fetchTelemetry() {
-      const keys = prefixes.flatMap(p => metrics.map(f => `${p}_${f}`)).join(',');
+      const keys = prefixes.flatMap(p => fields.map(f => `${p}_${f}`)).join(',');
       const res = await fetch(`${apiBaseUrl}/plugins/telemetry/DEVICE/${deviceId}/values/timeseries?keys=${keys}`, {
         headers: { 'X-Authorization': `Bearer ${jwt}` }
       });
@@ -197,7 +215,7 @@
         card.innerHTML = `
           <div class="machine-header">
             <span><span class="dot ${dotColor}"></span> <strong>Machine ${machineNum}</strong></span>
-            <span>Total Time: ${t.TotalTime} Min</span>
+            <span>Total: ${t.TotalTime} min</span>
           </div>
           <div>SKU: ${t.SKU}</div>
 
@@ -224,18 +242,26 @@
       });
     }
 
-    async function refresh() {
+    async function refreshAndRender() {
       await fetchTelemetry();
-      renderCards(sortBy);
+      renderCards(currentSortBy);
     }
 
     document.getElementById('sort-by').addEventListener('change', e => {
-      sortBy = e.target.value;
-      renderCards(sortBy);
+      currentSortBy = e.target.value;
+      renderCards(currentSortBy);
     });
 
-    if (!jwt) alert('Missing JWT token in URL (?token=...)');
-    else { refresh(); setInterval(refresh, 5000); }
+    async function init() {
+      if (!jwt) {
+        alert('Missing JWT token in URL (?token=...)');
+        return;
+      }
+      await refreshAndRender();
+      setInterval(refreshAndRender, 5000);
+    }
+
+    init();
   </script>
 </body>
 </html>
